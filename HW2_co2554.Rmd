@@ -1,0 +1,214 @@
+---
+title: "Data Science II Homework 2"
+author: "Camille Okonkwo"
+output:
+  pdf_document:
+    toc: yes
+    toc_depth: 2
+  html_document:
+    df_print: paged
+    toc: yes
+    toc_depth: '2'
+header-includes:
+- \usepackage{fancyhdr}
+- \usepackage{lipsum}
+- \pagestyle{fancy}
+- \fancyhead[R]{\thepage}
+- \fancypagestyle{plain}{\pagestyle{fancy}}
+editor_options: 
+  chunk_output_type: console
+--- 
+\newpage
+
+```{r setup, include=FALSE}
+library(tidyverse)
+
+knitr::opts_chunk$set(
+  echo = TRUE, 
+  warning = FALSE,
+  fig.width = 6, 
+  fig.asp = .6, 
+  out.width = "90%"
+  )
+```
+
+```{r, echo = T, message = FALSE, results='hide', warning=FALSE}
+library(tidymodels)
+library(splines)
+library(earth)
+```
+
+Partition the dataset into two parts: training data (80%) and test data (20%) with `tidymodels`. 
+```{r partition}
+college = read_csv("data/College.csv") |>
+  drop_na() |> 
+  select(-College)
+
+set.seed(2)
+
+# create a random split of 80% training and 20% test data
+data_split <- initial_split(data = college, prop = 0.8)
+
+# partitioned datasets
+training_data = training(data_split)
+
+testing_data = testing(data_split)
+
+head(training_data)
+head(testing_data)
+
+# creating a matrix of predictors and vector of response for each data set
+
+# training data
+x <- model.matrix(Outstate ~ ., training_data)[, -1] # matrix of predictors
+head(x)
+y <- training_data$Outstate # vector of response
+
+# testing data
+x2 <- model.matrix(Outstate ~ .,testing_data)[, -1] # matrix of predictors
+y2 <- testing_data$Outstate # vector of response
+```
+
+# 1a) Fit smoothing spline models to predict out-of-state tuition (Outstate) using the percentage of alumni who donate (perc.alumni) as the only predictor, across a range of degrees of freedom. Plot the model fits for each degree of freedom. Describe the observed patterns that emerge with varying degrees of freedom. Select an appropriate degree of freedom for the model and plot this optimal fit. Explain the criteria you used to determine the best choice of degree of freedom.
+```{r smoothing_spline}
+library(splines)
+
+# create a grid for x
+perc.alumni.grid <- seq(0, max(college$perc.alumni) + 5, by = 1)
+
+# loop prep
+fit.ss = list()
+pred.ss = list()
+pred.ss.df = list()
+pred.ss.df.range = data.frame()
+
+set.seed(2)
+# loop for a range of degrees of freedom
+for (i in 1.1:20) {
+  fit.ss[[i]] = smooth.spline(training_data$perc.alumni, training_data$Outstate, df = i)
+  pred.ss[[i]] = predict(fit.ss[[i]], x = perc.alumni.grid)
+  pred.ss.df[[i]] = data.frame(pred = pred.ss[[i]]$y, perc.alumni = perc.alumni.grid, df = i)
+  pred.ss.df.range = rbind(pred.ss.df[[i]], pred.ss.df.range)
+}
+
+# scatter plot
+p <- ggplot(data = training_data, aes(x = perc.alumni, y = Outstate)) + geom_point(color = rgb(0.2, 0.4, 0.2, 0.5))
+
+# plot the model fits for each degree of freedom
+p +
+  geom_line(aes(x = perc.alumni, y = pred, group = df, color = df), data = pred.ss.df.range) + theme_bw()
+
+set.seed(2)
+
+# select an appropriate degree of freedom for the model 
+fit.ss.optimal = smooth.spline(training_data$perc.alumni, training_data$Outstate)
+
+fit.ss.optimal$df
+
+# predicted values
+pred.ss.optimal <- predict(fit.ss.optimal,
+                   x = perc.alumni.grid)
+
+pred.ss.optimal.df <- data.frame(pred = pred.ss.optimal$y,
+                         perc.alumni = perc.alumni.grid)
+
+# plot this optimal fit
+p.optimal <- ggplot(data = training_data, aes(x = perc.alumni, y = Outstate)) + geom_point(color = rgb(0.2, 0.4, 0.2, 0.5))
+  
+p.optimal +
+  geom_line(aes(x = perc.alumni, y = pred), data = pred.ss.optimal.df,
+            color = rgb(0.8, 0.1, 0.1, 1)) + theme_bw()
+```
+When the degrees of freedom is smaller, the model resembles a linear model. As the degrees of freedom increase, the model becomes more flexible and we can see that exemplified through the wavy lines. For the optimal smoothing splines model, the degrees of freedom = `r fit.ss.optimal$df`. To determine the best choice of degrees of freedom, we can use cross-validation to choose the degrees of freedom that result in the best predictive performance.
+
+\newpage
+# 1b) Train a multivariate adaptive regression spline (MARS) model to predict the response variable. Report the regression function. Present the partial dependence plot of an arbitrary predictor in your model. Report the test error.
+```{r MARS}
+library(earth)
+library(caret)
+
+# 10-fold cross-validation
+ctrl <- trainControl(method = "cv", number = 10)
+
+# set grid
+mars_grid <- expand.grid(degree = 1:3, nprune = 2:15)
+
+set.seed(2)
+
+# fit a MARS model
+mars.fit <- train(x, y,
+                  method = "earth",
+                  tuneGrid = mars_grid,
+                  trControl = ctrl)
+# plot
+ggplot(mars.fit)
+
+# best tuning parameters
+mars.fit$bestTune
+
+# regression function
+mars.fit$finalModel
+
+# report the regression function
+summary(mars.fit)
+coef(mars.fit$finalModel)
+
+# partial dependence plot on arbitrary predictor Grad.Rate
+p1 <- pdp::partial(mars.fit, pred.var = c("Grad.Rate"), grid.resolution = 10) |>
+  autoplot()
+
+p1
+
+# test error
+pred.mars <- predict(mars.fit, newdata = testing_data)
+
+test.error.mars <- mean((pred.mars - y2)^2)
+```
+The regression function for the MARS model is **f(Outstate) = 9748.1791 + 0.4632⋅h(Apps−3646) − 1.8972⋅h(2279-Accept) + 6.3690⋅h(913-Enroll) − 1.9849⋅h(Enroll−913) − 1.9452⋅h(1363-F.Undergrad) − 0.6939⋅h(5895-Room.Board) + 0.8542⋅h(1230-Personal) + 25.4428⋅h(perc.alumni−6) + 0.7506⋅h(Expend−6864) − 0.7703⋅h(Expend−15387) − 28.1240⋅h(83-Grad.Rate)**. The test error is `r mean((pred.mars - y2)^2)`.
+
+\newpage
+# 1c) Construct a generalized additive model (GAM) to predict the response variable. Does your GAM model include all the predictors? For the nonlinear terms included in your model, generate plots to visualize these relationships and discuss your observations. Report the test error.
+```{r GAM}
+set.seed(2)
+
+# fit a GAM model using 10-fold cross-validation
+gam.fit <- train(x, y,
+                  method = "gam",
+                  tuneGrid = data.frame(method = "GCV.Cp", select = c(TRUE, FALSE)),
+                  trControl = ctrl)
+
+gam.fit$bestTune
+
+# for non-linear terms, generate plots to visualize relationships
+gam.fit$finalModel
+plot(gam.fit$finalModel)
+
+# report test error
+pred.gam <- predict(gam.fit, newdata = testing_data)
+
+test.error.gam <- mean((pred.gam - y2)^2)
+```
+The best fit GAM model does include all predictors. From the final models plots, we can see that some predictors are more linear than others. The test error is `r mean((pred.gam - y2)^2)`.
+
+\newpage
+# 1d) In this dataset, would you favor a MARS model over a linear model for predicting out-of-state tuition? If so, why? More broadly, in general applications, do you consider a MARS model to be superior to a linear model? Please share your reasoning.
+```{r model_compare}
+set.seed(2)
+
+# fit a linear model using 10-fold cross-validation
+lm.fit <- train(x, y, 
+                method = "lm",
+                trControl = ctrl)
+
+summary(lm.fit)
+
+# compare models
+resamp <- resamples(list(lm = lm.fit, mars = mars.fit))
+
+summary(resamp)
+
+parallelplot(resamp, metric = "RMSE")
+
+bwplot(resamp, metric = "RMSE")
+```
+From the resampling summary, I believe the best model is the MARS since it has the smallest mean and median RMSE value. I would prefer fitting a MARS model over a linear model mostly because of its flexibility. MARS models can capture non-linear relationships, can capture interactions between variables, and are generally more robust. 
