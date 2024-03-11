@@ -3,6 +3,7 @@ title: "Data Science II Homework 2"
 author: "Camille Okonkwo"
 output:
   pdf_document:
+    latex_engine: xelatex
     toc: yes
     toc_depth: 2
   html_document:
@@ -23,19 +24,14 @@ editor_options:
 ```{r setup, include=FALSE}
 library(tidyverse)
 
-knitr::opts_chunk$set(
-  echo = TRUE, 
-  warning = FALSE,
-  fig.width = 6, 
-  fig.asp = .6, 
-  out.width = "90%"
-  )
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
 ```
 
 ```{r, echo = T, message = FALSE, results='hide', warning=FALSE}
 library(tidymodels)
 library(splines)
 library(earth)
+library(caret)
 ```
 
 Partition the dataset into two parts: training data (80%) and test data (20%) with `tidymodels`. 
@@ -188,7 +184,7 @@ pred.gam <- predict(gam.fit, newdata = testing_data)
 
 test.error.gam <- mean((pred.gam - y2)^2)
 ```
-The best fit GAM model does include all predictors. From the final models plots, we can see that some predictors are more linear than others. The test error is `r mean((pred.gam - y2)^2)`.
+The best fit GAM model does include all predictors. From the final models plots, we can see that some predictors are more non-linear than others. The test error is `r mean((pred.gam - y2)^2)`.
 
 \newpage
 # 1d) In this dataset, would you favor a MARS model over a linear model for predicting out-of-state tuition? If so, why? More broadly, in general applications, do you consider a MARS model to be superior to a linear model? Please share your reasoning.
