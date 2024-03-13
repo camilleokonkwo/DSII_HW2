@@ -173,7 +173,7 @@ pred.gam <- predict(gam.fit, newdata = testing_data)
 
 test.error.gam <- mean((pred.gam - y2)^2)
 ```
-The best fit GAM model does include all predictors, as the selection method is **FALSE**. From the final models plots, we see that `Terminal`, `Books`, `Top25Perc`, `Personal`, and `Enroll` appear to be linear terms as their df = 1, but the predictors have an "s", indicating the smoothing function was used and these terms are interpreted as non-linear. We can observe that some predictors are more non-linear than others as the degrees of freedom increase. For example, `Top10perc` has more wave in the graph compared to `S.F.Ratio`. The test error is `r mean((pred.gam - y2)^2)`.
+The best fit GAM model does include all predictors, as the selection method is **FALSE**. From the final models plots, we see that `Terminal`, `Books`, `Top25Perc`, `Personal`, and `Enroll` appear to be linear terms as their df = 1, but the all the predictors in the model have an "s", indicating the smoothing function was used and these terms are interpreted as non-linear. We can observe that some predictors are more non-linear than others as the degrees of freedom increase. For example, `Top10perc` has more wave in the graph compared to `S.F.Ratio`. The test error is `r mean((pred.gam - y2)^2)`.
 
 \newpage
 # 1d) In this dataset, would you favor a MARS model over a linear model for predicting out-of-state tuition? If so, why? More broadly, in general applications, do you consider a MARS model to be superior to a linear model? Please share your reasoning.
